@@ -1,0 +1,21 @@
+{
+  "name": "vaccine-appointment-notifier",
+  "version": "1.0.0",
+  "description": "nodejs file that will pull data from vaccinespotter.org, do distance math, and then notify via pushover",
+  "main": "process.js",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "gps-distance": "0.0.4",
+    "node-cron": "^3.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iammoen/vaccine-appointment-notifier.git"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
