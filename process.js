@@ -1,18 +1,41 @@
-var distance = require('gps-distance');
+const fs = require('fs');
+const distance = require('gps-distance');
 const axios = require('axios');
-var cron = require('node-cron');
+const cron = require('node-cron');
 
 const pushover = {
-  user: 'userstring',
+  user: 'userid',
   token: 'apitoken'
 }
 
-const myGPS = [44.995242, -93.156451] // pull this from google maps. it is lat lng
+const zip = '55113'
+
 const maxDistance = 50; // this is in miles, mirrors 50 mi in the webpage options list
 
 // get timestamp here https://www.unixtimestamp.com/
 const eligibilityTimestamp = 1617098400 // set to March 30th at 5am
 
+const locationIdBlacklist = [
+  783522
+]
+
+let myGPS = [] // this gets set later
+
+function getGPS() {
+  return new Promise(function (resolve, reject) {
+    let rawdata = fs.readFileSync('postalcodes.json');
+    let zipcodes = JSON.parse(rawdata);
+    // console.log(zipcodes[zip]);
+    myGPS = zipcodes[zip].reverse();
+    console.log(myGPS)
+    if (myGPS.length == 2) {
+      resolve()
+    } else {
+      reject('GPS coordinates for your zipcode are not found.')
+    }
+
+  });
+}
 
 function processData(json) {
   return new Promise(function (resolve, reject) {
@@ -22,7 +45,7 @@ function processData(json) {
     let _totalAppointments = 0
 
     obj.forEach(element => {
-      if (element.properties.appointments_available == true && (distance(element.geometry.coordinates[1], element.geometry.coordinates[0], myGPS[0], myGPS[1]) < (maxDistance * 1.60934))) {
+      if (element.properties.appointments_available == true && (distance(element.geometry.coordinates[1], element.geometry.coordinates[0], myGPS[0], myGPS[1]) < (maxDistance * 1.60934)) && !locationIdBlacklist.includes(element.properties.id)) {
         _totalAppointments += element.properties.appointments.length
         _availableLocations.push(element)
       }
@@ -41,21 +64,28 @@ function processData(json) {
 
 
 function sendNotification(obj) {
-  let msg = `There are ${obj.availableLocations.length} locations with a total of ${obj.totalAppointments} open appointments. Go here for more deets. https://www.vaccinespotter.org/MN/?zip=55113&radius=50`;
+  let msg = `There are ${obj.availableLocations.length} locations with a total of ${obj.totalAppointments} open appointments. Go here for more deets. https://www.vaccinespotter.org/MN/?zip=${zip}&radius=${maxDistance}`;
 
-  // Send a POST request
-  axios({
-    method: 'post',
-    url: 'https://api.pushover.net/1/messages.json',
-    data: {
-      token: pushover.token,
-      user: pushover.user,
-      message: msg,
-      sound: 'tugboat',
-      title: 'Vaccination appointments available',
-      priority: 1
-    }
-  });
+  if (pushover.user != 'userid') {
+    // Send a POST request
+    axios({
+      method: 'post',
+      url: 'https://api.pushover.net/1/messages.json',
+      data: {
+        token: pushover.token,
+        user: pushover.user,
+        message: msg,
+        sound: 'tugboat',
+        title: 'Vaccination appointments available',
+        priority: 1
+      }
+    });
+  } else {
+    console.log('This is where you would get notified with: ')
+    console.log(msg);
+  }
+
+
 }
 
 function getAppointments() {
@@ -77,11 +107,12 @@ function areEligible() {
       console.log('ARE ELIGIBLE. Running...')
       resolve();
     } else {
-      console.log('not eligible. stop.')
       reject('You are not eligible yet')
     }
   })
 }
+// run one right away, then cron it
+getGPS().then(areEligible).then(getAppointments).then(processData).then(sendNotification).catch(console.error);
 
 cron.schedule('*/5 * * * *', () => {
   areEligible().then(getAppointments).then(processData).then(sendNotification).catch(console.error);
